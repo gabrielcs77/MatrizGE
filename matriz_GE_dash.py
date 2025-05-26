@@ -78,7 +78,7 @@ except Exception as e:
     print(f"Erro ao carregar a imagem de explicação: {e}")
 
 
-app = dash.Dash(__name__, suppress_callback_exceptions=True)
+app = dash.Dash(__name__, suppress_callback_exceptions=True, title="Matriz GE")
 server = app.server
 
 def create_filter_popover(filter_id, label_text, button_id):
