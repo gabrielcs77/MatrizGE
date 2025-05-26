@@ -8,8 +8,6 @@ from PIL import Image
 import io
 import base64
 
-server = app.server
-
 # ==== Constantes Globais para Dimensões da Imagem ====
 IMAGE_ORIGINAL_WIDTH = 1705
 IMAGE_ORIGINAL_HEIGHT = 1650
@@ -17,7 +15,8 @@ TARGET_ASPECT_RATIO = IMAGE_ORIGINAL_WIDTH / IMAGE_ORIGINAL_HEIGHT # Largura / A
 
 # ==== Carregar Dados ====
 arquivo_excel = 'Matriz GE - EP.xlsx'
-arquivo_imagem = 'Fundo GE.png'
+arquivo_imagem_fundo = 'Fundo GE.png'
+arquivo_imagem_explicacao = 'explicacao.png'
 
 try:
     df = pd.read_excel(arquivo_excel, sheet_name='Análise', skiprows=2)
@@ -56,22 +55,34 @@ df["Posição Competitiva"] = pd.to_numeric(df["Posição Competitiva"], errors=
 df["Atratividade Mercado"] = pd.to_numeric(df["Atratividade Mercado"], errors="coerce")
 df["Hora Aluno"] = pd.to_numeric(df["Hora Aluno"], errors="coerce").fillna(1)
 
-encoded_image = None
+encoded_image_fundo = None
 try:
-    image = Image.open(arquivo_imagem)
-    buffer = io.BytesIO()
-    image.save(buffer, format="PNG")
-    encoded_image = base64.b64encode(buffer.getvalue()).decode()
+    image_fundo_pil = Image.open(arquivo_imagem_fundo)
+    buffer_fundo = io.BytesIO()
+    image_fundo_pil.save(buffer_fundo, format="PNG")
+    encoded_image_fundo = base64.b64encode(buffer_fundo.getvalue()).decode()
 except FileNotFoundError:
-    print(f"Erro: O arquivo de imagem '{arquivo_imagem}' não foi encontrado.")
+    print(f"Erro: O arquivo de imagem de fundo '{arquivo_imagem_fundo}' não foi encontrado.")
 except Exception as e:
-    print(f"Erro ao carregar ou processar a imagem de fundo: {e}")
+    print(f"Erro ao carregar a imagem de fundo: {e}")
+
+encoded_image_explicacao = None
+try:
+    image_explicacao_pil = Image.open(arquivo_imagem_explicacao)
+    buffer_explicacao = io.BytesIO()
+    image_explicacao_pil.save(buffer_explicacao, format="PNG")
+    encoded_image_explicacao = base64.b64encode(buffer_explicacao.getvalue()).decode()
+except FileNotFoundError:
+    print(f"Alerta: O arquivo de imagem de explicação '{arquivo_imagem_explicacao}' não foi encontrado.")
+except Exception as e:
+    print(f"Erro ao carregar a imagem de explicação: {e}")
+
 
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
 server = app.server
 
 def create_filter_popover(filter_id, label_text, button_id):
-    fixed_button_width = "230px"
+    fixed_button_width = "210px" 
     return html.Div([
         dmc.Text(label_text, size="md", fw=500, mb=4),
         dmc.Popover(
@@ -110,8 +121,9 @@ def create_filter_popover(filter_id, label_text, button_id):
 app.layout = dmc.MantineProvider(children=[
     dmc.Container([
         dmc.Title("📊 Matriz GE - Análise de Cursos", order=2, ta="center", my="lg"),
-        html.Div([
-            html.Div([ # Sidebar
+        html.Div([ # Contêiner Flex principal para 3 colunas
+            # Coluna 1: Sidebar
+            html.Div([
                 dmc.Stack([
                     dmc.Title("🎯 Filtros", order=3, mb="sm"),
                     create_filter_popover(filter_id="filtro-area", label_text="Área", button_id="botao-popover-area"),
@@ -119,18 +131,47 @@ app.layout = dmc.MantineProvider(children=[
                     create_filter_popover(filter_id="filtro-produto", label_text="Produto", button_id="botao-popover-produto"),
                     dmc.Group([dmc.Button("🔄 Resetar Filtros", id="botao-reset", color="red", variant="light", size="sm")], mt="md"),
                     dmc.Divider(my="md"),
-                    dmc.Title("🎨 Estilo das Bolhas", order=3, mb="sm"),
-                    dmc.ColorInput(id="cor-bolha", label="Cor da Bolha", value="#FFFFFF", format="hex", mb="sm", size="sm"),
-                    dmc.Text("Transparência da Bolha (%)", size="sm", fw=500, mb=4),
-                    dmc.Slider(id='transparencia', min=0, max=100, step=1, value=55,
-                               marks=[{'value': 0, 'label': '0%'}, {'value': 50, 'label': '50%'}, {'value': 100, 'label': '100%'}], mb="sm"),
                     dmc.Checkbox(label="Exibir nomes dos produtos", id="exibir-texto", checked=True, mb="sm", size="sm"),
                     dmc.Button("⬇️ Baixar Gráfico (PNG)", id="botao-download", variant="outline", mt="md", size="sm"),
                     dcc.Download(id="download-imagem")
                 ])
-            ], style={'width': '25%', 'minWidth': '280px', 'padding': '20px', 'borderRight': '1px solid #eee'}),
-            html.Div([dcc.Graph(id='grafico-matriz', config={'displayModeBar': False})], style={'width': '73%', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'flex-start', 'padding': '0 20px'})
-        ], style={'display': 'flex', 'flexDirection': 'row', 'alignItems': 'flex-start'})
+            ], style={ 
+                'width': '20%', 
+                'minWidth': '260px', 
+                'padding': '20px', 
+                'borderRight': '1px solid #eee'
+            }),
+            # Coluna 2: Área do Gráfico
+            html.Div([
+                dcc.Graph(id='grafico-matriz', config={'displayModeBar': False})
+            ], style={ 
+                'width': '50%', 
+                'display': 'flex',
+                'justifyContent': 'center',
+                'alignItems': 'flex-start',
+                'padding': '0 10px 0 5px', 
+            }),
+            # Coluna 3: Área da Imagem de Explicação
+            html.Div([
+                (html.Img(src=f"data:image/png;base64,{encoded_image_explicacao}", 
+                         style={'maxWidth': '100%', 
+                                'height': 'auto', 
+                                'display': 'block', 
+                                'marginTop': '30px'}) 
+                 if encoded_image_explicacao 
+                 else dmc.Text("Imagem 'explicacao.png' não encontrada.", color="red", align="center", mt="xl"))
+            ], style={ 
+                'width': '30%', 
+                'padding': '0 40px 0 20px', 
+                'display': 'flex',
+                'alignItems': 'flex-start', 
+                'justifyContent': 'center' 
+            })
+        ], style={ 
+            'display': 'flex', 
+            'flexDirection': 'row',
+            'alignItems': 'flex-start' 
+        })
     ], fluid=True, px="xl")
 ])
 
@@ -139,16 +180,22 @@ app.layout = dmc.MantineProvider(children=[
      Output('grafico-matriz', 'figure'),
      Output('filtro-area', 'value'), Output('filtro-quadrante', 'value'), Output('filtro-produto', 'value'),
      Output('botao-popover-area', 'children'), Output('botao-popover-quadrante', 'children'), Output('botao-popover-produto', 'children')],
-    [Input('filtro-area', 'value'), Input('filtro-quadrante', 'value'), Input('filtro-produto', 'value'),
-     Input('cor-bolha', 'value'), Input('transparencia', 'value'), Input('exibir-texto', 'checked'),
+    [Input('filtro-area', 'value'), 
+     Input('filtro-quadrante', 'value'), 
+     Input('filtro-produto', 'value'),
+     Input('exibir-texto', 'checked'),
      Input('botao-reset', 'n_clicks')],
     prevent_initial_call=False
 )
-def atualizar_tudo(selected_areas, selected_quadrantes, selected_produtos, cor_bolha, transparencia_percent, exibir_texto, reset_n_clicks):
+def atualizar_tudo(selected_areas, selected_quadrantes, selected_produtos, 
+                   exibir_texto, reset_n_clicks):
     triggered_input = callback_context.triggered_id
     areas_val = selected_areas if selected_areas is not None else []
     quadrantes_val = selected_quadrantes if selected_quadrantes is not None else []
     produtos_val = selected_produtos if selected_produtos is not None else []
+
+    fixed_cor_bolha = "#FFFFFF" 
+    fixed_transparencia_percent = 55 
 
     min_bubble_size_pref = 1
     target_max_bubble_size_pref = 150
@@ -163,24 +210,24 @@ def atualizar_tudo(selected_areas, selected_quadrantes, selected_produtos, cor_b
         if quadrantes_val: df_plot = df_plot[df_plot['Quadrante'].isin(quadrantes_val)]
         if produtos_val: df_plot = df_plot[df_plot['Produto'].isin(produtos_val)]
 
-    df_temp_area_opts = df_options_source.copy()
+    df_temp_area_opts = df_options_source.copy();
     if quadrantes_val: df_temp_area_opts = df_temp_area_opts[df_temp_area_opts['Quadrante'].isin(quadrantes_val)]
     if produtos_val: df_temp_area_opts = df_temp_area_opts[df_temp_area_opts['Produto'].isin(produtos_val)]
     unique_areas = sorted(df_temp_area_opts["Grande Área"].dropna().unique()) if "Grande Área" in df_temp_area_opts else []
     children_areas = [dmc.Checkbox(label=str(i), value=i, styles={"labelWrapper": {"width": "100%"}}) for i in unique_areas]
 
-    df_temp_quad_opts = df_options_source.copy()
+    df_temp_quad_opts = df_options_source.copy();
     if areas_val: df_temp_quad_opts = df_temp_quad_opts[df_temp_quad_opts['Grande Área'].isin(areas_val)]
     if produtos_val: df_temp_quad_opts = df_temp_quad_opts[df_temp_quad_opts['Produto'].isin(produtos_val)]
     unique_quadrantes = sorted(df_temp_quad_opts["Quadrante"].dropna().unique()) if "Quadrante" in df_temp_quad_opts else []
     children_quadrantes = [dmc.Checkbox(label=str(i), value=i, styles={"labelWrapper": {"width": "100%"}}) for i in unique_quadrantes]
 
-    df_temp_prod_opts = df_options_source.copy()
+    df_temp_prod_opts = df_options_source.copy();
     if areas_val: df_temp_prod_opts = df_temp_prod_opts[df_temp_prod_opts['Grande Área'].isin(areas_val)]
     if quadrantes_val: df_temp_prod_opts = df_temp_prod_opts[df_temp_prod_opts['Quadrante'].isin(quadrantes_val)]
     unique_produtos = sorted(df_temp_prod_opts["Produto"].dropna().unique()) if "Produto" in df_temp_prod_opts else []
     children_produtos = [dmc.Checkbox(label=str(i), value=i, styles={"labelWrapper": {"width": "100%"}}) for i in unique_produtos]
-
+    
     def get_button_text(selected_vals, default_single, default_plural_prefix):
         if not selected_vals: return f"Selecionar {default_single.lower()}"
         if len(selected_vals) == 1:
@@ -227,13 +274,14 @@ def atualizar_tudo(selected_areas, selected_quadrantes, selected_produtos, cor_b
                 fig.add_trace(go.Scatter(
                     x=df_q["Posição Competitiva"], y=df_q["Atratividade Mercado"],
                     mode="markers+text" if exibir_texto else "markers", name=str(quadrante_unico if pd.notna(quadrante_unico) else "N/A"),
-                    marker=dict(size=df_q["marker_size_calculada"], color=cor_bolha, opacity=max(0, min(1, (100 - transparencia_percent) / 100))),
+                    marker=dict(size=df_q["marker_size_calculada"], color=fixed_cor_bolha, opacity=max(0, min(1, (100 - fixed_transparencia_percent) / 100))),
                     text=df_q["Produto_Formatado"] if exibir_texto else None, textposition=df_q["posicao_texto_calculada"] if exibir_texto else None,
                     textfont=dict(color="black", size=14, family="Bahnschrift, Arial, sans-serif"), customdata=df_q['Produto'],
                     hovertemplate="<b>%{customdata}</b><br><b>Posição Competitiva:</b> %{x:.1f}<br><b>Atratividade:</b> %{y:.1f}<extra></extra>"
                 ))
-    if encoded_image:
-        fig.add_layout_image(dict(source="data:image/png;base64," + encoded_image, xref="x domain", yref="y domain", x=0, y=1, sizex=1, sizey=1, sizing="stretch", opacity=1, layer="below"))
+
+    if encoded_image_fundo:
+        fig.add_layout_image(dict(source="data:image/png;base64," + encoded_image_fundo, xref="x domain", yref="y domain", x=0, y=1, sizex=1, sizey=1, sizing="stretch", opacity=1, layer="below"))
 
     graph_pixel_width = 800
     graph_pixel_height = int(graph_pixel_width / TARGET_ASPECT_RATIO)
@@ -242,14 +290,20 @@ def atualizar_tudo(selected_areas, selected_quadrantes, selected_produtos, cor_b
         width=graph_pixel_width, height=graph_pixel_height, autosize=False,
         xaxis=dict(
             range=[0, 10], autorange=False, fixedrange=True, 
-            title_text="<b>Posição Competitiva →</b>", # MODIFICADO
-            titlefont=dict(size=17), tickfont=dict(size=14),
+            title=dict(
+                text="<b>Posição Competitiva</b>",  # MODIFICADO: Seta removida
+                font=dict(size=17)
+            ), 
+            tickfont=dict(size=14),
             showgrid=False, zeroline=False, tickmode="linear", tick0=0, dtick=1, ticks="outside", ticklen=6, tickwidth=1, tickcolor='grey', linecolor='lightgrey'
         ),
         yaxis=dict(
             range=[0, 10], autorange=False, fixedrange=True, 
-            title_text="<b>Atratividade de Mercado ↑</b>", # MODIFICADO
-            titlefont=dict(size=17), tickfont=dict(size=14),
+            title=dict(
+                text="<b>Atratividade de Mercado</b>",  # MODIFICADO: Seta removida
+                font=dict(size=17)
+            ), 
+            tickfont=dict(size=14),
             scaleanchor="x", scaleratio=(IMAGE_ORIGINAL_HEIGHT / IMAGE_ORIGINAL_WIDTH),
             showgrid=False, zeroline=False, tickmode="linear", tick0=0, dtick=1, ticks="outside", ticklen=6, tickwidth=1, tickcolor='grey', linecolor='lightgrey'
         ),
