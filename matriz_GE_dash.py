@@ -8,6 +8,8 @@ from PIL import Image
 import io
 import base64
 
+server = app.server
+
 # ==== Constantes Globais para Dimensões da Imagem ====
 IMAGE_ORIGINAL_WIDTH = 1705
 IMAGE_ORIGINAL_HEIGHT = 1650
