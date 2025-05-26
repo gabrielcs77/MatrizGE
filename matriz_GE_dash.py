@@ -16,7 +16,7 @@ TARGET_ASPECT_RATIO = IMAGE_ORIGINAL_WIDTH / IMAGE_ORIGINAL_HEIGHT # Largura / A
 # ==== Carregar Dados ====
 arquivo_excel = 'Matriz GE - EP.xlsx'
 arquivo_imagem_fundo = 'Fundo GE.png'
-arquivo_imagem_explicacao = 'explicacao2.png'
+arquivo_imagem_explicacao = 'explicacao.png'
 
 try:
     df = pd.read_excel(arquivo_excel, sheet_name='Análise', skiprows=2)
