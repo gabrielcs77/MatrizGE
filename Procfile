@@ -1,0 +1,1 @@
+web: gunicorn Matriz_GE_dash:server
