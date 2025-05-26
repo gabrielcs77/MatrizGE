@@ -78,7 +78,7 @@ except Exception as e:
     print(f"Erro ao carregar a imagem de explicação: {e}")
 
 
-app = dash.Dash(__name__, suppress_callback_exceptions=True, title="Matriz GE")
+app = dash.Dash(__name__, suppress_callback_exceptions=True, title="Matriz GE - Educação Profissional")
 server = app.server
 
 def create_filter_popover(filter_id, label_text, button_id):
@@ -120,7 +120,7 @@ def create_filter_popover(filter_id, label_text, button_id):
 
 app.layout = dmc.MantineProvider(children=[
     dmc.Container([
-        dmc.Title("📊 Matriz GE - Análise de Cursos", order=2, ta="center", my="lg"),
+        dmc.Title("📊 Ciclo de Vida de Produtos - Educação Profissional", order=2, ta="center", my="lg"),
         html.Div([ # Contêiner Flex principal para 3 colunas
             # Coluna 1: Sidebar
             html.Div([
