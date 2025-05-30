@@ -1,7 +1,7 @@
 import dash
 from dash import dcc, html, Input, Output, State, callback_context
 import dash_mantine_components as dmc
-# from dash_iconify import DashIconify # Não utilizado diretamente no código final, pode remover se não usar em outro lugar
+from dash_iconify import DashIconify # Importação necessária
 import plotly.graph_objects as go
 import pandas as pd
 from PIL import Image
@@ -16,6 +16,10 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 IMAGE_ORIGINAL_WIDTH = 1705
 IMAGE_ORIGINAL_HEIGHT = 1650
 TARGET_ASPECT_RATIO = IMAGE_ORIGINAL_WIDTH / IMAGE_ORIGINAL_HEIGHT if IMAGE_ORIGINAL_HEIGHT != 0 else 16/9 # Largura / Altura
+
+# ==== Constantes para Dimensionamento Responsivo do Gráfico ====
+GRAPH_CONTAINER_MIN_WIDTH = 400  # px, Largura mínima para o contêiner do gráfico
+GRAPH_CONTAINER_MAX_WIDTH = 850  # px, Largura máxima para o contêiner do gráfico (ajuste se necessário)
 
 # ==== Carregar Dados ====
 arquivo_excel = os.path.join(BASE_DIR, 'Matriz GE - EP.xlsx')
@@ -179,32 +183,42 @@ def create_layout_matriz_ge():
                 'width': '20%',
                 'minWidth': '260px',
                 'padding': '20px',
-                'borderRight': '1px solid #eee'
+                'borderRight': '1px solid #eee' 
             }),
-            # Coluna 2: Área do Gráfico
-            html.Div([
-                dcc.Graph(id='grafico-matriz', config={'displayModeBar': False})
-            ], style={
-                'width': '50%',
-                'display': 'flex',
-                'justifyContent': 'center',
-                'alignItems': 'flex-start',
-                'padding': '0 10px 0 5px',
-            }),
+            
+            # Coluna 2: Área do Gráfico --- AJUSTES PARA RESPONSIVIDADE E PROPORÇÃO ---
+            html.Div(
+                id='graph-column-container', 
+                children=[
+                    dcc.Graph(
+                        id='grafico-matriz', 
+                        config={'displayModeBar': False},
+                        style={'width': '100%', 'height': '100%'} # Gráfico preenche o contêiner
+                    )
+                ], 
+                style={
+                    'width': '50%', 
+                    'minWidth': f'{GRAPH_CONTAINER_MIN_WIDTH}px',
+                    'maxWidth': f'{GRAPH_CONTAINER_MAX_WIDTH}px',
+                    'aspectRatio': str(TARGET_ASPECT_RATIO), 
+                    'margin': '0 auto', 
+                    'overflow': 'hidden', 
+                    'padding': '0 10px 0 5px', 
+                    'display': 'flex', 
+                    'flexDirection': 'column'
+                }
+            ),
+            # --- FIM DOS AJUSTES NA COLUNA DO GRÁFICO ---
+
             # Coluna 3: Área da Imagem de Explicação
             html.Div([
                 (html.Img(src=f"data:image/png;base64,{encoded_image_explicacao}",
-                          style={'maxWidth': '100%',
-                                 'height': 'auto',
-                                 'display': 'block',
-                                 'marginTop': '30px'})
+                          style={'maxWidth': '100%', 'height': 'auto', 'display': 'block', 'marginTop': '30px'})
                  if encoded_image_explicacao
-                 else dmc.Text("Imagem 'explicacao.png' não encontrada.",
-                               c="red",
-                               ta="center",
-                               mt="xl"))
+                 else dmc.Text("Imagem 'explicacao.png' não encontrada.", c="red", ta="center", mt="xl"))
             ], style={
-                'width': '30%',
+                'width': '30%', 
+                'minWidth': '200px', # Adicionado minWidth
                 'padding': '0 40px 0 20px',
                 'display': 'flex',
                 'alignItems': 'flex-start',
@@ -213,7 +227,8 @@ def create_layout_matriz_ge():
         ], style={
             'display': 'flex',
             'flexDirection': 'row',
-            'alignItems': 'flex-start'
+            'alignItems': 'flex-start',
+            'flexWrap': 'nowrap' # Para garantir que as colunas não quebrem linha prematuramente
         })
     ], fluid=True, px="xl")
 
@@ -365,37 +380,34 @@ def create_layout_nota_tecnica():
         )
     ], fluid=True, px="xl")
 
-## ==== Layout Principal da Aplicação (com Navegação - Usando dmc.Paper para header) ====
+# ==== Layout Principal da Aplicação (com Navegação e Switch no Header) ====
 app.layout = dmc.MantineProvider(
+    id="mantine-provider",
+    forceColorScheme="light", 
     children=[
         dcc.Location(id='url', refresh=False),
-
-        # --- Início da Seção do Cabeçalho com dmc.Paper ---
         dmc.Paper(
-            shadow="xs",
-            p="sm",
-            withBorder=True,
-            style={"marginBottom": "20px"},
+            shadow="xs", p="sm", withBorder=True, style={"marginBottom": "20px"},
             children=[
                 dmc.Group(
-                    justify="flex-start", # MODIFICADO: position -> justify
-                    gap="xl",
-                    mx="xl",
+                    justify="space-between", align="center",
                     children=[
-                        dmc.Anchor(
-                            dmc.Text("📊 Matriz GE", fw=500, size="lg"),
-                            href="/", # URL da página principal
+                        dmc.Group(
+                            gap="xl",
+                            children=[
+                                dmc.Anchor(dmc.Text("📊 Matriz GE", fw=500, size="lg"), href="/"),
+                                dmc.Anchor(dmc.Text("📄 Nota Técnica", fw=500, size="lg"), href="/nota-tecnica"),
+                            ]
                         ),
-                        dmc.Anchor(
-                            dmc.Text("📄 Nota Técnica", fw=500, size="lg"),
-                            href="/nota-tecnica", # URL da nova página
+                        dmc.Switch(
+                            id="dark-mode-switch", size="md", checked=False,
+                            offLabel=DashIconify(icon="radix-icons:sun", width=18),
+                            onLabel=DashIconify(icon="radix-icons:moon", width=18)
                         ),
                     ]
                 )
             ]
         ),
-        # --- Fim da Seção do Cabeçalho ---
-
         html.Div(id='page-content', style={"padding": "0 20px 20px 20px"})
     ]
 )
@@ -406,10 +418,19 @@ app.layout = dmc.MantineProvider(
 def display_page(pathname):
     if pathname == '/nota-tecnica':
         return create_layout_nota_tecnica()
-    elif pathname == '/': # Página principal
+    elif pathname == '/': 
         return create_layout_matriz_ge()
     else:
         return dmc.Center(dmc.Text("Página não encontrada (404)", size="xl", c="red"), style={"height": "50vh"})
+
+# ==== Callback para Alternar Modo Escuro ====
+@app.callback(
+    Output('mantine-provider', 'forceColorScheme'),
+    Input('dark-mode-switch', 'checked'),
+    prevent_initial_call=True
+)
+def toggle_dark_mode(checked):
+    return 'dark' if checked else 'light'
 
 
 # ==== Callback para Atualizar Filtros e Gráfico ====
@@ -423,23 +444,29 @@ def display_page(pathname):
      Input('filtro-produto', 'value'),
      Input('exibir-texto', 'checked'),
      Input('botao-reset', 'n_clicks'),
-     Input('url', 'pathname')],
+     Input('url', 'pathname'),
+     Input('dark-mode-switch', 'checked')],
     prevent_initial_call='initial_duplicate'
 )
 def atualizar_tudo(selected_areas, selected_quadrantes, selected_produtos,
-                   exibir_texto, reset_n_clicks, pathname):
+                   exibir_texto, reset_n_clicks, pathname,
+                   dark_mode_checked):
 
     if pathname != '/':
         empty_fig = go.Figure()
+        axis_font_color_empty_fig = 'white' if dark_mode_checked else '#333'
         empty_fig.update_layout(
             xaxis_visible=False, yaxis_visible=False,
-            annotations=[dict(text="Navegue para a página da Matriz GE para visualizar os dados.", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False, font=dict(size=16))]
+            annotations=[dict(text="Navegue para a página da Matriz GE para visualizar os dados.", 
+                              xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False, 
+                              font=dict(size=16, color=axis_font_color_empty_fig))],
+            paper_bgcolor='rgba(0,0,0,0)', 
+            plot_bgcolor='rgba(0,0,0,0)'
         )
-        # Construindo o texto para os botões de popover
+        
         texto_botao_area = html.Div([html.Div("Selecionar área", style={"flexGrow": 1, "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis", "textAlign": "left", "paddingRight": "8px"}), html.Div("▼", style={"flexShrink": 0, "minWidth": "16px", "textAlign": "right"})], style={"width": "100%", "display": "flex", "alignItems": "center"})
         texto_botao_quadrante = html.Div([html.Div("Selecionar quadrante", style={"flexGrow": 1, "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis", "textAlign": "left", "paddingRight": "8px"}), html.Div("▼", style={"flexShrink": 0, "minWidth": "16px", "textAlign": "right"})], style={"width": "100%", "display": "flex", "alignItems": "center"})
         texto_botao_produto = html.Div([html.Div("Selecionar produto", style={"flexGrow": 1, "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis", "textAlign": "left", "paddingRight": "8px"}), html.Div("▼", style={"flexShrink": 0, "minWidth": "16px", "textAlign": "right"})], style={"width": "100%", "display": "flex", "alignItems": "center"})
-
         return ([], [], [], empty_fig, [], [], [], texto_botao_area, texto_botao_quadrante, texto_botao_produto)
 
 
@@ -450,9 +477,8 @@ def atualizar_tudo(selected_areas, selected_quadrantes, selected_produtos,
     quadrantes_val = selected_quadrantes if selected_quadrantes is not None else []
     produtos_val = selected_produtos if selected_produtos is not None else []
 
-    fixed_cor_bolha = "#FFFFFF"
+    fixed_cor_bolha = "#FFFFFF" 
     fixed_transparencia_percent = 55
-
     min_bubble_size_pref = 1
     target_max_bubble_size_pref = 150
 
@@ -493,43 +519,31 @@ def atualizar_tudo(selected_areas, selected_quadrantes, selected_produtos,
             text_content = f"Selecionar {default_single_text.lower()}"
         elif len(selected_vals) == 1:
             txt = str(selected_vals[0])
-            max_l = 25
+            max_l = 25 
             text_content = txt if len(txt) <= max_l else txt[:max_l-3] + "..."
         else:
-            plural_suffix = "s" if not default_single_text.endswith("s") else "" # heurística simples
-            if default_single_text.lower() == "área":
-                plural_suffix = "s selecionadas"
-            elif default_single_text.lower() == "quadrante":
-                plural_suffix = "s selecionados"
-            elif default_single_text.lower() == "produto":
-                 plural_suffix = "s selecionados"
-            else: # Fallback
-                plural_suffix = f"{plural_suffix} selecionad{'as' if default_single_text.endswith('a') else 'os'}"
-
+            plural_suffix = "s"
+            if default_single_text.lower() == "área": plural_suffix = "s selecionadas"
+            elif default_single_text.lower() == "quadrante": plural_suffix = "s selecionados"
+            elif default_single_text.lower() == "produto": plural_suffix = "s selecionados"
+            else: plural_suffix = f"s selecionad{'as' if default_single_text.endswith('a') else 'os'}"
             text_content = f"{len(selected_vals)} {default_single_text.lower().replace('ã','a')}{plural_suffix}"
-
-
-        return html.Div([
-            html.Div(text_content, style=base_style_text),
-            html.Div("▼", style=base_style_arrow)
-        ], style=container_style)
+        return html.Div([ html.Div(text_content, style=base_style_text), html.Div("▼", style=base_style_arrow)], style=container_style)
 
     texto_botao_area_children = get_button_children(areas_val, "Área")
     texto_botao_quadrante_children = get_button_children(quadrantes_val, "Quadrante")
     texto_botao_produto_children = get_button_children(produtos_val, "Produto")
-
 
     fig = go.Figure()
     cols_for_plot = ["Hora Aluno", "Quadrante", "Posição Competitiva", "Atratividade Mercado", "Produto"]
     for col_plot in cols_for_plot:
         if col_plot not in df_plot.columns:
             if col_plot == "Hora Aluno": df_plot[col_plot] = 1.0
-            elif col_plot in ["Posição Competitiva", "Atratividade Mercado"]: df_plot[col_plot] = pd.NA # Use pd.NA for consistency
+            elif col_plot in ["Posição Competitiva", "Atratividade Mercado"]: df_plot[col_plot] = pd.NA
             else: df_plot[col_plot] = pd.Series(dtype='object')
 
     max_hora_aluno = df_plot["Hora Aluno"].max() if not (df_plot.empty or df_plot["Hora Aluno"].isnull().all() or "Hora Aluno" not in df_plot.columns) else 1.0
     if pd.isna(max_hora_aluno): max_hora_aluno = 1.0
-
 
     fator_escala = max_hora_aluno / target_max_bubble_size_pref if pd.notna(max_hora_aluno) and max_hora_aluno > 0 else 1.0
     if fator_escala == 0: fator_escala = 1.0
@@ -542,14 +556,26 @@ def atualizar_tudo(selected_areas, selected_quadrantes, selected_produtos,
                 posicoes_texto = []
                 for _, row in df_q.iterrows():
                     x_pv, y_am = row["Posição Competitiva"], row["Atratividade Mercado"]
-                    pos = "middle center"
+                    pos = "middle center" # Padrão
                     if pd.notna(x_pv) and pd.notna(y_am):
-                        pos_x = "center"; pos_y = "middle"
-                        if x_pv <= 2.0: pos_x = "right"
-                        elif x_pv >= 8.0: pos_x = "left"
-                        if y_am <= 2.0: pos_y = "top"
-                        elif y_am >= 8.0: pos_y = "bottom"
-                        pos = f"{pos_y} {pos_x}"
+                        # Lógica de posicionamento do texto para evitar sobreposição com a bolha
+                        # Vertical: top, middle, bottom. Horizontal: left, center, right.
+                        # O texto é posicionado em relação ao *centro* do marcador.
+                        pos_y, pos_x = "middle", "center"
+
+                        if y_am < 2.5: pos_y = "top"       # Bolha em baixo, texto em cima
+                        elif y_am > 7.5: pos_y = "bottom"    # Bolha em cima, texto em baixo
+                        
+                        if x_pv < 2.5: pos_x = "right"     # Bolha à esquerda, texto à direita
+                        elif x_pv > 7.5: pos_x = "left"      # Bolha à direita, texto à esquerda
+                        
+                        # Se estiver centralizado em um eixo, ajustar o outro para não ficar sobre a bolha
+                        if pos_y == "middle" and pos_x == "center":
+                            if x_pv > 5: pos_x = "left" # Default para direita do centro da bolha
+                            else: pos_x = "right"      # Default para esquerda do centro da bolha
+                        
+                        pos = f"{pos_y} {pos_x}".strip() # Remove espaços extras se um for 'middle' ou 'center' por padrão
+
                     posicoes_texto.append(pos)
                 df_q["posicao_texto_calculada"] = posicoes_texto
                 df_q["marker_size_calculada"] = (df_q["Hora Aluno"] / fator_escala).apply(lambda s: max(s if pd.notna(s) else 0, min_bubble_size_pref))
@@ -559,38 +585,52 @@ def atualizar_tudo(selected_areas, selected_quadrantes, selected_produtos,
                     mode="markers+text" if exibir_texto else "markers", name=str(quadrante_unico if pd.notna(quadrante_unico) else "N/A"),
                     marker=dict(size=df_q["marker_size_calculada"], color=fixed_cor_bolha, opacity=max(0, min(1, (100 - fixed_transparencia_percent) / 100.0))),
                     text=df_q["Produto_Formatado"] if exibir_texto else None, textposition=df_q["posicao_texto_calculada"] if exibir_texto else None,
-                    textfont=dict(color="black", size=14, family="Bahnschrift, Arial, sans-serif"), customdata=df_q['Produto'],
+                    textfont=dict(
+                        color='white' if dark_mode_checked else 'black',
+                        size=14, family="Bahnschrift, Arial, sans-serif"
+                    ),
+                    customdata=df_q['Produto'],
                     hovertemplate="<b>%{customdata}</b><br><b>Posição Competitiva:</b> %{x:.1f}<br><b>Atratividade:</b> %{y:.1f}<extra></extra>"
                 ))
 
     if encoded_image_fundo:
         fig.add_layout_image(dict(source="data:image/png;base64," + encoded_image_fundo, xref="x domain", yref="y domain", x=0, y=1, sizex=1, sizey=1, sizing="stretch", opacity=1, layer="below"))
 
-    graph_pixel_width = 800
-    graph_pixel_height = int(graph_pixel_width / TARGET_ASPECT_RATIO) if TARGET_ASPECT_RATIO != 0 else int(graph_pixel_width * (IMAGE_ORIGINAL_HEIGHT / IMAGE_ORIGINAL_WIDTH if IMAGE_ORIGINAL_WIDTH != 0 else 9/16))
-
+    axis_font_color = 'white' if dark_mode_checked else '#333'
+    axis_tick_color = '#777' if dark_mode_checked else 'grey'
+    axis_line_color = '#555' if dark_mode_checked else 'lightgrey'
 
     fig.update_layout(
-        width=graph_pixel_width, height=graph_pixel_height, autosize=False,
+        autosize=True, 
         xaxis=dict(
             range=[0, 10], autorange=False, fixedrange=True,
-            title=dict(text="<b>Posição Competitiva</b>", font=dict(size=17)),
-            tickfont=dict(size=14),
-            showgrid=False, zeroline=False, tickmode="linear", tick0=0, dtick=1, ticks="outside", ticklen=6, tickwidth=1, tickcolor='grey', linecolor='lightgrey'
+            title=dict(text="<b>Posição Competitiva</b>", font=dict(size=17, color=axis_font_color)),
+            tickfont=dict(size=14, color=axis_font_color),
+            showgrid=False, zeroline=False, tickmode="linear", tick0=0, dtick=1, ticks="outside", ticklen=6, tickwidth=1,
+            tickcolor=axis_tick_color, linecolor=axis_line_color
         ),
         yaxis=dict(
             range=[0, 10], autorange=False, fixedrange=True,
-            title=dict(text="<b>Atratividade de Mercado</b>", font=dict(size=17)),
-            tickfont=dict(size=14),
+            title=dict(text="<b>Atratividade de Mercado</b>", font=dict(size=17, color=axis_font_color)),
+            tickfont=dict(size=14, color=axis_font_color),
             scaleanchor="x", scaleratio=(IMAGE_ORIGINAL_HEIGHT / IMAGE_ORIGINAL_WIDTH) if IMAGE_ORIGINAL_WIDTH !=0 else 1,
-            showgrid=False, zeroline=False, tickmode="linear", tick0=0, dtick=1, ticks="outside", ticklen=6, tickwidth=1, tickcolor='grey', linecolor='lightgrey'
+            showgrid=False, zeroline=False, tickmode="linear", tick0=0, dtick=1, ticks="outside", ticklen=6, tickwidth=1,
+            tickcolor=axis_tick_color, linecolor=axis_line_color
         ),
-        plot_bgcolor='rgba(255,255,255,0.1)', paper_bgcolor='rgba(0,0,0,0)', showlegend=False,
+        plot_bgcolor='rgba(0,0,0,0)', 
+        paper_bgcolor='rgba(0,0,0,0)', 
+        showlegend=False,
         margin=dict(l=60, r=30, t=30, b=60),
         hovermode="closest"
     )
-    if df_plot.empty and (bool(areas_val) or bool(quadrantes_val) or bool(produtos_val)): # Check if lists are non-empty
-         fig.update_layout(xaxis_visible=False, yaxis_visible=False, annotations=[dict(text="Nenhum curso para os filtros.", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False, font=dict(size=16))])
+    if df_plot.empty and (bool(areas_val) or bool(quadrantes_val) or bool(produtos_val)):
+        fig.update_layout(
+            xaxis_visible=False, yaxis_visible=False,
+            annotations=[dict(
+                text="Nenhum curso para os filtros.", xref="paper", yref="paper", x=0.5, y=0.5,
+                showarrow=False, font=dict(size=16, color=axis_font_color) 
+            )]
+        )
     return (children_areas, children_quadrantes, children_produtos, fig, areas_val, quadrantes_val, produtos_val, texto_botao_area_children, texto_botao_quadrante_children, texto_botao_produto_children)
 
 # ==== Callback para Baixar Gráfico ====
@@ -602,36 +642,28 @@ def atualizar_tudo(selected_areas, selected_quadrantes, selected_produtos,
 )
 def baixar_grafico(n_clicks, current_figure_dict):
     if n_clicks and current_figure_dict and current_figure_dict.get('data'):
+        fig_to_download = go.Figure(current_figure_dict)
+        
         fig_layout = current_figure_dict.get('layout', {})
-        on_screen_width = fig_layout.get('width')
-        on_screen_height = fig_layout.get('height')
-
-        if not isinstance(on_screen_width, (int, float)) or on_screen_width <= 0:
-            on_screen_width = 800
-        if not isinstance(on_screen_height, (int, float)) or on_screen_height <= 0:
-            on_screen_height = int(on_screen_width / TARGET_ASPECT_RATIO) if TARGET_ASPECT_RATIO != 0 else int(on_screen_width * (IMAGE_ORIGINAL_HEIGHT / IMAGE_ORIGINAL_WIDTH if IMAGE_ORIGINAL_WIDTH != 0 else 9/16))
-
         export_width = IMAGE_ORIGINAL_WIDTH
         export_height = IMAGE_ORIGINAL_HEIGHT
 
-        fig_to_download = go.Figure(current_figure_dict)
-
-        if not fig_to_download.data: # se não houver dados (ex: filtros vazios)
-            export_width = int(on_screen_width) if on_screen_width and on_screen_width > 0 else IMAGE_ORIGINAL_WIDTH
-            export_height = int(on_screen_height) if on_screen_height and on_screen_height > 0 else IMAGE_ORIGINAL_HEIGHT
-        else: # Se houver dados, mas a imagem de fundo não foi carregada, use as dimensões da tela
-            if not encoded_image_fundo:
-                 export_width = int(on_screen_width) if on_screen_width and on_screen_width > 0 else 800 # fallback
-                 export_height = int(on_screen_height) if on_screen_height and on_screen_height > 0 else 600 # fallback
-
+        if not fig_to_download.data or not encoded_image_fundo:
+            on_screen_width = fig_layout.get('width')
+            on_screen_height = fig_layout.get('height')
+            if not isinstance(on_screen_width, (int, float)) or on_screen_width <= 0: on_screen_width = 800
+            if not isinstance(on_screen_height, (int, float)) or on_screen_height <= 0:
+                on_screen_height = int(on_screen_width / TARGET_ASPECT_RATIO) if TARGET_ASPECT_RATIO != 0 else int(on_screen_width * (IMAGE_ORIGINAL_HEIGHT / (IMAGE_ORIGINAL_WIDTH if IMAGE_ORIGINAL_WIDTH != 0 else 1)))
+            
+            export_width = int(on_screen_width) if on_screen_width and on_screen_width > 0 else 800
+            export_height = int(on_screen_height) if on_screen_height and on_screen_height > 0 else 600
+            
+        fig_to_download.update_layout(paper_bgcolor='white', plot_bgcolor='white')
 
         img_bytes = fig_to_download.to_image(
-            format="png",
-            width=export_width,
-            height=export_height,
-            scale=1 # A escala é tratada pelas dimensões width/height
+            format="png", width=export_width, height=export_height, scale=1
         )
-        return dcc.send_bytes(img_bytes, "matriz_ge_nota_tecnica.png")
+        return dcc.send_bytes(img_bytes, "matriz_ge_app.png")
     return dash.no_update
 
 
