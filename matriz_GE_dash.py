@@ -1,22 +1,26 @@
 import dash
 from dash import dcc, html, Input, Output, State, callback_context
 import dash_mantine_components as dmc
-from dash_iconify import DashIconify
+# from dash_iconify import DashIconify # Não utilizado diretamente no código final, pode remover se não usar em outro lugar
 import plotly.graph_objects as go
 import pandas as pd
 from PIL import Image
 import io
 import base64
+import os
+
+# ==== Define o diretório base do script para caminhos de arquivo robustos ====
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ==== Constantes Globais para Dimensões da Imagem ====
 IMAGE_ORIGINAL_WIDTH = 1705
 IMAGE_ORIGINAL_HEIGHT = 1650
-TARGET_ASPECT_RATIO = IMAGE_ORIGINAL_WIDTH / IMAGE_ORIGINAL_HEIGHT # Largura / Altura
+TARGET_ASPECT_RATIO = IMAGE_ORIGINAL_WIDTH / IMAGE_ORIGINAL_HEIGHT if IMAGE_ORIGINAL_HEIGHT != 0 else 16/9 # Largura / Altura
 
 # ==== Carregar Dados ====
-arquivo_excel = 'Matriz GE - EP.xlsx'
-arquivo_imagem_fundo = 'Fundo GE.png'
-arquivo_imagem_explicacao = 'explicacao.png'
+arquivo_excel = os.path.join(BASE_DIR, 'Matriz GE - EP.xlsx')
+arquivo_imagem_fundo = os.path.join(BASE_DIR, 'Fundo GE.png')
+arquivo_imagem_explicacao = os.path.join(BASE_DIR, 'explicacao.png')
 
 try:
     df = pd.read_excel(arquivo_excel, sheet_name='Análise', skiprows=2)
@@ -81,45 +85,81 @@ except Exception as e:
 app = dash.Dash(__name__, suppress_callback_exceptions=True, title="Matriz GE - Educação Profissional")
 server = app.server
 
+# ==== Função para criar Popover de Filtro ====
 def create_filter_popover(filter_id, label_text, button_id):
-    fixed_button_width = "210px" 
+    fixed_button_width = "300px"
     return html.Div([
+        dcc.Store(id=f"store-label-{filter_id}", data=f"Selecionar {label_text.lower()}"),
         dmc.Text(label_text, size="md", fw=500, mb=4),
         dmc.Popover(
-            withArrow=True, shadow="md", position="bottom-start", trapFocus=False, closeOnClickOutside=True,
+            withArrow=True,
+            shadow="md",
+            position="bottom-start",
+            trapFocus=False,
+            closeOnClickOutside=True,
             children=[
                 dmc.PopoverTarget(
                     dmc.Button(
-                        id=button_id, 
-                        children=f"Selecionar {label_text.lower()}", 
-                        variant="default", 
-                        rightSection=DashIconify(icon="carbon:chevron-down", width=16),
-                        styles={
-                            "width": fixed_button_width, 
-                            "textAlign": "left", 
-                            "justifyContent": "space-between", 
-                            "paddingRight": "10px", 
-                            "height":"36px"
+                        id=button_id,
+                        variant="default",
+                        size="sm",
+                        style={
+                            "width": fixed_button_width,
+                            "height": "36px",
+                            "padding": "0 12px",
+                            "display": "flex",
+                            "alignItems": "center",
+                            "justifyContent": "space-between",
+                            "textAlign": "left",
+                            "overflow": "hidden"
                         },
-                        size="sm"
+                        children=html.Div([
+                            html.Div(
+                                id=f"label-{filter_id}",
+                                children=f"Selecionar {label_text.lower()}",
+                                style={
+                                    "flexGrow": 1,
+                                    "whiteSpace": "nowrap",
+                                    "overflow": "hidden",
+                                    "textOverflow": "ellipsis",
+                                    "textAlign": "left",
+                                    "paddingRight": "8px"
+                                }
+                            ),
+                            html.Div(
+                                "▼", # Seta para baixo
+                                style={
+                                    "flexShrink": 0,
+                                    "minWidth": "16px",
+                                    "textAlign": "right"
+                                }
+                            )
+                        ], style={
+                            "width": "100%",
+                            "display": "flex",
+                            "alignItems": "center"
+                        })
                     )
                 ),
                 dmc.PopoverDropdown(
                     style={
-                        "maxHeight": "250px", 
-                        "overflowY": "auto", 
-                        "minWidth": fixed_button_width, 
-                        "padding":"8px"
+                        "maxHeight": "250px",
+                        "overflowY": "auto",
+                        "minWidth": fixed_button_width,
+                        "padding": "8px"
                     },
-                    children=[dmc.CheckboxGroup(id=filter_id, children=[], value=[])]
+                    children=[
+                        dmc.CheckboxGroup(id=filter_id, children=[], value=[])
+                    ]
                 )
             ]
         ),
         dmc.Space(h="sm")
     ])
 
-app.layout = dmc.MantineProvider(children=[
-    dmc.Container([
+# ==== Layout da Página Principal (Matriz GE) ====
+def create_layout_matriz_ge():
+    return dmc.Container([
         dmc.Title("📊 Ciclo de Vida de Produtos - Educação Profissional", order=2, ta="center", my="lg"),
         html.Div([ # Contêiner Flex principal para 3 colunas
             # Coluna 1: Sidebar
@@ -135,67 +175,283 @@ app.layout = dmc.MantineProvider(children=[
                     dmc.Button("⬇️ Baixar Gráfico (PNG)", id="botao-download", variant="outline", mt="md", size="sm"),
                     dcc.Download(id="download-imagem")
                 ])
-            ], style={ 
-                'width': '20%', 
-                'minWidth': '260px', 
-                'padding': '20px', 
+            ], style={
+                'width': '20%',
+                'minWidth': '260px',
+                'padding': '20px',
                 'borderRight': '1px solid #eee'
             }),
             # Coluna 2: Área do Gráfico
             html.Div([
                 dcc.Graph(id='grafico-matriz', config={'displayModeBar': False})
-            ], style={ 
-                'width': '50%', 
+            ], style={
+                'width': '50%',
                 'display': 'flex',
                 'justifyContent': 'center',
                 'alignItems': 'flex-start',
-                'padding': '0 10px 0 5px', 
+                'padding': '0 10px 0 5px',
             }),
             # Coluna 3: Área da Imagem de Explicação
             html.Div([
-                (html.Img(src=f"data:image/png;base64,{encoded_image_explicacao}", 
-                         style={'maxWidth': '100%', 
-                                'height': 'auto', 
-                                'display': 'block', 
-                                'marginTop': '30px'}) 
-                 if encoded_image_explicacao 
-                 else dmc.Text("Imagem 'explicacao.png' não encontrada.", color="red", align="center", mt="xl"))
-            ], style={ 
-                'width': '30%', 
-                'padding': '0 40px 0 20px', 
+                (html.Img(src=f"data:image/png;base64,{encoded_image_explicacao}",
+                          style={'maxWidth': '100%',
+                                 'height': 'auto',
+                                 'display': 'block',
+                                 'marginTop': '30px'})
+                 if encoded_image_explicacao
+                 else dmc.Text("Imagem 'explicacao.png' não encontrada.",
+                               c="red",
+                               ta="center",
+                               mt="xl"))
+            ], style={
+                'width': '30%',
+                'padding': '0 40px 0 20px',
                 'display': 'flex',
-                'alignItems': 'flex-start', 
-                'justifyContent': 'center' 
+                'alignItems': 'flex-start',
+                'justifyContent': 'center'
             })
-        ], style={ 
-            'display': 'flex', 
+        ], style={
+            'display': 'flex',
             'flexDirection': 'row',
-            'alignItems': 'flex-start' 
+            'alignItems': 'flex-start'
         })
     ], fluid=True, px="xl")
-])
 
+# ==== Layout da Página de Nota Técnica ====
+def create_layout_nota_tecnica():
+    texto_da_nota = """
+    A **Matriz GE** é uma ferramenta de **análise estratégica** desenvolvida para ajudar empresas a **avaliar o portfólio de produtos**. Ela foi criada pela consultoria McKinsey em parceria com a General Electric como uma **evolução da Matriz BCG**. É composta por uma **grade 3x3** (nove quadrantes), que avalia cada produto com base em dois critérios principais:
+
+    &nbsp;
+
+    1. **Atratividade de Mercado** (eixo vertical):
+
+        • Avalia o quão atraente é o mercado para este produto.
+        
+        • Fatores considerados: tamanho de mercado, crescimento de mercado, vulnerabilidade de mercado e volume de concorrentes.
+
+    2. **Posição Competitiva** (eixo horizontal):
+
+        • Mede o quão bem-posicionado o produto está em relação ao mercado.
+
+        • Fatores considerados: faturamento, satisfação de clientes, capacidade de oferta e facilidade de adesão.
+
+        &nbsp;
+
+    Esses dois eixos são divididos em **baixo**, **médio** e **alto**, gerando nove zonas diferentes.
+
+    &nbsp;
+
+    • **Investir / Crescer (zona superior direita)**:
+        • Alta atratividade + alta força competitiva.
+        • Estratégia: expandir, alocar recursos, inovar.
+
+    • **Selecionar / Manter (zonas centrais)**:
+        • Atração e força competitiva medianas.
+        • Estratégia: manter o desempenho atual, avaliar oportunidades com cautela.
+
+    • **Desinvestir / Colher (zona inferior esquerda)**:
+        • Baixa atratividade + baixa força competitiva.
+        • Estratégia: reduzir investimentos, sair do mercado.
+
+    &nbsp;
+    
+    Para os itens de análise interna foram considerados os semestres 2024.1, 2024.2 e 2025.1. Os intervalos de classificação são:
+
+    **Faturamento**
+
+    Nota 1: até R$ 100.000,00
+
+    Nota 2: até R$ 250.000,00
+
+    Nota 3: até R$ 350.000,00
+
+    Nota 4: até R$ 700.000,00
+
+    Nota 5: acima de R$ 700.000,00
+
+    **Satisfação**
+
+    Nota 1: NPS até 20%
+
+    Nota 2: NPS entre 21% e 40%
+
+    Nota 3: NPS entre 41% e 60%
+
+    Nota 4: NPS entre 61% e 80%
+
+    Nota 5: NPS acima de 81%
+
+    **Capacidade de Oferta (execução do planejamento)**
+
+    Nota 1: Menor ou igual que 50%
+
+    Nota 2: Maior que 50% e menor ou igual que 70%
+
+    Nota 3: Maior que 70% e menor ou igual que 80%
+
+    Nota 4: Maior que 80% e menor ou igual que 90%
+
+    Nota 5: Maior que 90%
+
+    **Facilidade de Adesão (fechamento de turmas)**
+
+    Nota 1: Maior que 120 dias
+
+    Nota 2: Maior que 100 dias e menor ou igual que 120 dias
+
+    Nota 3: Maior que 80 dias e menor ou igual que 100 dias
+
+    Nota 4: Maior que 60 dias e menor ou igual que 80 dias
+
+    Nota 5: Menor ou igual que 60 dias
+
+    **Tamanho de Mercado (estoque de empregos)**
+
+    Nota 1: Saldo menor ou igual a 500
+
+    Nota 2: Saldo maior que 500 e menor ou igual a 1000
+
+    Nota 3: Saldo maior que 1000 e menor ou igual a 2000
+
+    Nota 4: Saldo maior que 2000 e menor ou igual a 3000
+
+    Nota 5: Saldo maior que 3000
+
+    **Crescimento de Mercado (produto entre o estoque de empregos e o mapa do trabalho)**
+
+    Nota 1: Resultado menor ou igual a 20000
+
+    Nota 2: Resultado maior que 20000 e menor ou igual a 40000
+
+    Nota 3: Resultado maior que 40000 e menor ou igual a 60000
+
+    Nota 4: Resultado maior que 60000 e menor ou igual a 80000
+
+    Nota 5: Saldo maior que 80000
+
+    **Vulnerabilidade (sensibilidade aos fatores externos – análise PESTEL)**
+
+    Nota 5: cenário muito favorável
+
+    Nota 4: cenário favorável
+
+    Nota 3: cenário neutro
+
+    Nota 2: cenário desfavorável
+
+    Nota 1: cenário muito desfavorável
+
+    **Volume de Concorrentes**
+
+    Nota 5: nenhum concorrente relevante
+
+    Nota 4: há concorrentes, mas nenhum relevante
+
+    Nota 3: há concorrentes, mas somente 1 é relevante
+
+    Nota 2: há concorrentes e 2 são relevantes
+
+    nota 1: há 3 ou mais concorrentes relevantes
+    """
+    return dmc.Container([
+        dmc.Title("📄 Nota Técnica", order=2, ta="center", my="lg"),
+        dmc.Paper(
+            shadow="xs",
+            p="xl",
+            children=[
+                dcc.Markdown(texto_da_nota, dangerously_allow_html=False)
+            ]
+        )
+    ], fluid=True, px="xl")
+
+## ==== Layout Principal da Aplicação (com Navegação - Usando dmc.Paper para header) ====
+app.layout = dmc.MantineProvider(
+    children=[
+        dcc.Location(id='url', refresh=False),
+
+        # --- Início da Seção do Cabeçalho com dmc.Paper ---
+        dmc.Paper(
+            shadow="xs",
+            p="sm",
+            withBorder=True,
+            style={"marginBottom": "20px"},
+            children=[
+                dmc.Group(
+                    justify="flex-start", # MODIFICADO: position -> justify
+                    gap="xl",
+                    mx="xl",
+                    children=[
+                        dmc.Anchor(
+                            dmc.Text("📊 Matriz GE", fw=500, size="lg"),
+                            href="/", # URL da página principal
+                        ),
+                        dmc.Anchor(
+                            dmc.Text("📄 Nota Técnica", fw=500, size="lg"),
+                            href="/nota-tecnica", # URL da nova página
+                        ),
+                    ]
+                )
+            ]
+        ),
+        # --- Fim da Seção do Cabeçalho ---
+
+        html.Div(id='page-content', style={"padding": "0 20px 20px 20px"})
+    ]
+)
+
+# ==== Callback para Atualizar o Conteúdo da Página com Base na URL ====
+@app.callback(Output('page-content', 'children'),
+              [Input('url', 'pathname')])
+def display_page(pathname):
+    if pathname == '/nota-tecnica':
+        return create_layout_nota_tecnica()
+    elif pathname == '/': # Página principal
+        return create_layout_matriz_ge()
+    else:
+        return dmc.Center(dmc.Text("Página não encontrada (404)", size="xl", c="red"), style={"height": "50vh"})
+
+
+# ==== Callback para Atualizar Filtros e Gráfico ====
 @app.callback(
-    [Output('filtro-area', 'children'), Output('filtro-quadrante', 'children'), Output('filtro-produto', 'children'),
-     Output('grafico-matriz', 'figure'),
-     Output('filtro-area', 'value'), Output('filtro-quadrante', 'value'), Output('filtro-produto', 'value'),
-     Output('botao-popover-area', 'children'), Output('botao-popover-quadrante', 'children'), Output('botao-popover-produto', 'children')],
-    [Input('filtro-area', 'value'), 
-     Input('filtro-quadrante', 'value'), 
+    [Output('filtro-area', 'children', allow_duplicate=True), Output('filtro-quadrante', 'children', allow_duplicate=True), Output('filtro-produto', 'children', allow_duplicate=True),
+     Output('grafico-matriz', 'figure', allow_duplicate=True),
+     Output('filtro-area', 'value', allow_duplicate=True), Output('filtro-quadrante', 'value', allow_duplicate=True), Output('filtro-produto', 'value', allow_duplicate=True),
+     Output('botao-popover-area', 'children', allow_duplicate=True), Output('botao-popover-quadrante', 'children', allow_duplicate=True), Output('botao-popover-produto', 'children', allow_duplicate=True)],
+    [Input('filtro-area', 'value'),
+     Input('filtro-quadrante', 'value'),
      Input('filtro-produto', 'value'),
      Input('exibir-texto', 'checked'),
-     Input('botao-reset', 'n_clicks')],
-    prevent_initial_call=False
+     Input('botao-reset', 'n_clicks'),
+     Input('url', 'pathname')],
+    prevent_initial_call='initial_duplicate'
 )
-def atualizar_tudo(selected_areas, selected_quadrantes, selected_produtos, 
-                   exibir_texto, reset_n_clicks):
-    triggered_input = callback_context.triggered_id
+def atualizar_tudo(selected_areas, selected_quadrantes, selected_produtos,
+                   exibir_texto, reset_n_clicks, pathname):
+
+    if pathname != '/':
+        empty_fig = go.Figure()
+        empty_fig.update_layout(
+            xaxis_visible=False, yaxis_visible=False,
+            annotations=[dict(text="Navegue para a página da Matriz GE para visualizar os dados.", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False, font=dict(size=16))]
+        )
+        # Construindo o texto para os botões de popover
+        texto_botao_area = html.Div([html.Div("Selecionar área", style={"flexGrow": 1, "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis", "textAlign": "left", "paddingRight": "8px"}), html.Div("▼", style={"flexShrink": 0, "minWidth": "16px", "textAlign": "right"})], style={"width": "100%", "display": "flex", "alignItems": "center"})
+        texto_botao_quadrante = html.Div([html.Div("Selecionar quadrante", style={"flexGrow": 1, "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis", "textAlign": "left", "paddingRight": "8px"}), html.Div("▼", style={"flexShrink": 0, "minWidth": "16px", "textAlign": "right"})], style={"width": "100%", "display": "flex", "alignItems": "center"})
+        texto_botao_produto = html.Div([html.Div("Selecionar produto", style={"flexGrow": 1, "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis", "textAlign": "left", "paddingRight": "8px"}), html.Div("▼", style={"flexShrink": 0, "minWidth": "16px", "textAlign": "right"})], style={"width": "100%", "display": "flex", "alignItems": "center"})
+
+        return ([], [], [], empty_fig, [], [], [], texto_botao_area, texto_botao_quadrante, texto_botao_produto)
+
+
+    triggered_input_obj = callback_context.triggered[0] if callback_context.triggered else None
+    triggered_input = triggered_input_obj['prop_id'].split('.')[0] if triggered_input_obj else None
+
     areas_val = selected_areas if selected_areas is not None else []
     quadrantes_val = selected_quadrantes if selected_quadrantes is not None else []
     produtos_val = selected_produtos if selected_produtos is not None else []
 
-    fixed_cor_bolha = "#FFFFFF" 
-    fixed_transparencia_percent = 55 
+    fixed_cor_bolha = "#FFFFFF"
+    fixed_transparencia_percent = 55
 
     min_bubble_size_pref = 1
     target_max_bubble_size_pref = 150
@@ -227,27 +483,54 @@ def atualizar_tudo(selected_areas, selected_quadrantes, selected_produtos,
     if quadrantes_val: df_temp_prod_opts = df_temp_prod_opts[df_temp_prod_opts['Quadrante'].isin(quadrantes_val)]
     unique_produtos = sorted(df_temp_prod_opts["Produto"].dropna().unique()) if "Produto" in df_temp_prod_opts else []
     children_produtos = [dmc.Checkbox(label=str(i), value=i, styles={"labelWrapper": {"width": "100%"}}) for i in unique_produtos]
-    
-    def get_button_text(selected_vals, default_single, default_plural_prefix):
-        if not selected_vals: return f"Selecionar {default_single.lower()}"
-        if len(selected_vals) == 1:
-            txt = str(selected_vals[0]); max_l = 25 
-            return txt if len(txt) <= max_l else txt[:max_l-3] + "..."
-        return f"{len(selected_vals)} {default_plural_prefix} selecionad{'as' if default_single.endswith('a') else 'os'}"
-    texto_botao_area = get_button_text(areas_val, "Área", "áreas")
-    texto_botao_quadrante = get_button_text(quadrantes_val, "Quadrante", "quadrantes")
-    texto_botao_produto = get_button_text(produtos_val, "Produto", "produtos")
-    
+
+    def get_button_children(selected_vals, default_single_text):
+        base_style_text = {"flexGrow": 1, "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis", "textAlign": "left", "paddingRight": "8px"}
+        base_style_arrow = {"flexShrink": 0, "minWidth": "16px", "textAlign": "right"}
+        container_style = {"width": "100%", "display": "flex", "alignItems": "center"}
+
+        if not selected_vals:
+            text_content = f"Selecionar {default_single_text.lower()}"
+        elif len(selected_vals) == 1:
+            txt = str(selected_vals[0])
+            max_l = 25
+            text_content = txt if len(txt) <= max_l else txt[:max_l-3] + "..."
+        else:
+            plural_suffix = "s" if not default_single_text.endswith("s") else "" # heurística simples
+            if default_single_text.lower() == "área":
+                plural_suffix = "s selecionadas"
+            elif default_single_text.lower() == "quadrante":
+                plural_suffix = "s selecionados"
+            elif default_single_text.lower() == "produto":
+                 plural_suffix = "s selecionados"
+            else: # Fallback
+                plural_suffix = f"{plural_suffix} selecionad{'as' if default_single_text.endswith('a') else 'os'}"
+
+            text_content = f"{len(selected_vals)} {default_single_text.lower().replace('ã','a')}{plural_suffix}"
+
+
+        return html.Div([
+            html.Div(text_content, style=base_style_text),
+            html.Div("▼", style=base_style_arrow)
+        ], style=container_style)
+
+    texto_botao_area_children = get_button_children(areas_val, "Área")
+    texto_botao_quadrante_children = get_button_children(quadrantes_val, "Quadrante")
+    texto_botao_produto_children = get_button_children(produtos_val, "Produto")
+
+
     fig = go.Figure()
     cols_for_plot = ["Hora Aluno", "Quadrante", "Posição Competitiva", "Atratividade Mercado", "Produto"]
     for col_plot in cols_for_plot:
         if col_plot not in df_plot.columns:
             if col_plot == "Hora Aluno": df_plot[col_plot] = 1.0
-            elif col_plot in ["Posição Competitiva", "Atratividade Mercado"]: df_plot[col_plot] = pd.NA
+            elif col_plot in ["Posição Competitiva", "Atratividade Mercado"]: df_plot[col_plot] = pd.NA # Use pd.NA for consistency
             else: df_plot[col_plot] = pd.Series(dtype='object')
-    
+
     max_hora_aluno = df_plot["Hora Aluno"].max() if not (df_plot.empty or df_plot["Hora Aluno"].isnull().all() or "Hora Aluno" not in df_plot.columns) else 1.0
-    
+    if pd.isna(max_hora_aluno): max_hora_aluno = 1.0
+
+
     fator_escala = max_hora_aluno / target_max_bubble_size_pref if pd.notna(max_hora_aluno) and max_hora_aluno > 0 else 1.0
     if fator_escala == 0: fator_escala = 1.0
 
@@ -270,11 +553,11 @@ def atualizar_tudo(selected_areas, selected_quadrantes, selected_produtos,
                     posicoes_texto.append(pos)
                 df_q["posicao_texto_calculada"] = posicoes_texto
                 df_q["marker_size_calculada"] = (df_q["Hora Aluno"] / fator_escala).apply(lambda s: max(s if pd.notna(s) else 0, min_bubble_size_pref))
-                
+
                 fig.add_trace(go.Scatter(
                     x=df_q["Posição Competitiva"], y=df_q["Atratividade Mercado"],
                     mode="markers+text" if exibir_texto else "markers", name=str(quadrante_unico if pd.notna(quadrante_unico) else "N/A"),
-                    marker=dict(size=df_q["marker_size_calculada"], color=fixed_cor_bolha, opacity=max(0, min(1, (100 - fixed_transparencia_percent) / 100))),
+                    marker=dict(size=df_q["marker_size_calculada"], color=fixed_cor_bolha, opacity=max(0, min(1, (100 - fixed_transparencia_percent) / 100.0))),
                     text=df_q["Produto_Formatado"] if exibir_texto else None, textposition=df_q["posicao_texto_calculada"] if exibir_texto else None,
                     textfont=dict(color="black", size=14, family="Bahnschrift, Arial, sans-serif"), customdata=df_q['Produto'],
                     hovertemplate="<b>%{customdata}</b><br><b>Posição Competitiva:</b> %{x:.1f}<br><b>Atratividade:</b> %{y:.1f}<extra></extra>"
@@ -284,37 +567,33 @@ def atualizar_tudo(selected_areas, selected_quadrantes, selected_produtos,
         fig.add_layout_image(dict(source="data:image/png;base64," + encoded_image_fundo, xref="x domain", yref="y domain", x=0, y=1, sizex=1, sizey=1, sizing="stretch", opacity=1, layer="below"))
 
     graph_pixel_width = 800
-    graph_pixel_height = int(graph_pixel_width / TARGET_ASPECT_RATIO)
+    graph_pixel_height = int(graph_pixel_width / TARGET_ASPECT_RATIO) if TARGET_ASPECT_RATIO != 0 else int(graph_pixel_width * (IMAGE_ORIGINAL_HEIGHT / IMAGE_ORIGINAL_WIDTH if IMAGE_ORIGINAL_WIDTH != 0 else 9/16))
+
 
     fig.update_layout(
         width=graph_pixel_width, height=graph_pixel_height, autosize=False,
         xaxis=dict(
-            range=[0, 10], autorange=False, fixedrange=True, 
-            title=dict(
-                text="<b>Posição Competitiva</b>",  # MODIFICADO: Seta removida
-                font=dict(size=17)
-            ), 
+            range=[0, 10], autorange=False, fixedrange=True,
+            title=dict(text="<b>Posição Competitiva</b>", font=dict(size=17)),
             tickfont=dict(size=14),
             showgrid=False, zeroline=False, tickmode="linear", tick0=0, dtick=1, ticks="outside", ticklen=6, tickwidth=1, tickcolor='grey', linecolor='lightgrey'
         ),
         yaxis=dict(
-            range=[0, 10], autorange=False, fixedrange=True, 
-            title=dict(
-                text="<b>Atratividade de Mercado</b>",  # MODIFICADO: Seta removida
-                font=dict(size=17)
-            ), 
+            range=[0, 10], autorange=False, fixedrange=True,
+            title=dict(text="<b>Atratividade de Mercado</b>", font=dict(size=17)),
             tickfont=dict(size=14),
-            scaleanchor="x", scaleratio=(IMAGE_ORIGINAL_HEIGHT / IMAGE_ORIGINAL_WIDTH),
+            scaleanchor="x", scaleratio=(IMAGE_ORIGINAL_HEIGHT / IMAGE_ORIGINAL_WIDTH) if IMAGE_ORIGINAL_WIDTH !=0 else 1,
             showgrid=False, zeroline=False, tickmode="linear", tick0=0, dtick=1, ticks="outside", ticklen=6, tickwidth=1, tickcolor='grey', linecolor='lightgrey'
         ),
-        plot_bgcolor='rgba(255,255,255,0.1)', paper_bgcolor='rgba(0,0,0,0)', showlegend=False, 
-        margin=dict(l=60, r=30, t=30, b=60), 
+        plot_bgcolor='rgba(255,255,255,0.1)', paper_bgcolor='rgba(0,0,0,0)', showlegend=False,
+        margin=dict(l=60, r=30, t=30, b=60),
         hovermode="closest"
     )
-    if df_plot.empty and (areas_val or quadrantes_val or produtos_val):
+    if df_plot.empty and (bool(areas_val) or bool(quadrantes_val) or bool(produtos_val)): # Check if lists are non-empty
          fig.update_layout(xaxis_visible=False, yaxis_visible=False, annotations=[dict(text="Nenhum curso para os filtros.", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False, font=dict(size=16))])
-    return (children_areas, children_quadrantes, children_produtos, fig, areas_val, quadrantes_val, produtos_val, texto_botao_area, texto_botao_quadrante, texto_botao_produto)
+    return (children_areas, children_quadrantes, children_produtos, fig, areas_val, quadrantes_val, produtos_val, texto_botao_area_children, texto_botao_quadrante_children, texto_botao_produto_children)
 
+# ==== Callback para Baixar Gráfico ====
 @app.callback(
     Output("download-imagem", "data"),
     Input("botao-download", "n_clicks"),
@@ -326,26 +605,35 @@ def baixar_grafico(n_clicks, current_figure_dict):
         fig_layout = current_figure_dict.get('layout', {})
         on_screen_width = fig_layout.get('width')
         on_screen_height = fig_layout.get('height')
-        
-        if not isinstance(on_screen_width, (int, float)) or on_screen_width <= 0: 
-            on_screen_width = 800 
-        if not isinstance(on_screen_height, (int, float)) or on_screen_height <= 0:
-            on_screen_height = int(on_screen_width / TARGET_ASPECT_RATIO) if TARGET_ASPECT_RATIO != 0 else int(on_screen_width * (IMAGE_ORIGINAL_HEIGHT / IMAGE_ORIGINAL_WIDTH))
-        
-        scale_factor = 1.0
-        if on_screen_width != 0 :
-             scale_factor = IMAGE_ORIGINAL_WIDTH / on_screen_width
-        else:
-            print("Aviso: on_screen_width é zero no callback de download, usando scale_factor padrão de 1.0.")
 
-        img_bytes = go.Figure(current_figure_dict).to_image(
+        if not isinstance(on_screen_width, (int, float)) or on_screen_width <= 0:
+            on_screen_width = 800
+        if not isinstance(on_screen_height, (int, float)) or on_screen_height <= 0:
+            on_screen_height = int(on_screen_width / TARGET_ASPECT_RATIO) if TARGET_ASPECT_RATIO != 0 else int(on_screen_width * (IMAGE_ORIGINAL_HEIGHT / IMAGE_ORIGINAL_WIDTH if IMAGE_ORIGINAL_WIDTH != 0 else 9/16))
+
+        export_width = IMAGE_ORIGINAL_WIDTH
+        export_height = IMAGE_ORIGINAL_HEIGHT
+
+        fig_to_download = go.Figure(current_figure_dict)
+
+        if not fig_to_download.data: # se não houver dados (ex: filtros vazios)
+            export_width = int(on_screen_width) if on_screen_width and on_screen_width > 0 else IMAGE_ORIGINAL_WIDTH
+            export_height = int(on_screen_height) if on_screen_height and on_screen_height > 0 else IMAGE_ORIGINAL_HEIGHT
+        else: # Se houver dados, mas a imagem de fundo não foi carregada, use as dimensões da tela
+            if not encoded_image_fundo:
+                 export_width = int(on_screen_width) if on_screen_width and on_screen_width > 0 else 800 # fallback
+                 export_height = int(on_screen_height) if on_screen_height and on_screen_height > 0 else 600 # fallback
+
+
+        img_bytes = fig_to_download.to_image(
             format="png",
-            width=int(on_screen_width) if on_screen_width else IMAGE_ORIGINAL_WIDTH,
-            height=int(on_screen_height) if on_screen_height else IMAGE_ORIGINAL_HEIGHT,
-            scale=scale_factor
+            width=export_width,
+            height=export_height,
+            scale=1 # A escala é tratada pelas dimensões width/height
         )
-        return dcc.send_bytes(img_bytes, "matriz_ge.png")
+        return dcc.send_bytes(img_bytes, "matriz_ge_nota_tecnica.png")
     return dash.no_update
+
 
 if __name__ == '__main__':
     app.run(debug=True)
